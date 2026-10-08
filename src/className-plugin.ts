@@ -15,15 +15,13 @@ export const classNamePlugin = {
 
     function add() {
       if (instance.props.className && !isDefaultRenderFn()) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn(
-            [
-              '@tippyjs/react: Cannot use `className` prop in conjunction with',
-              '`render` prop. Place the className on the element you are',
-              'rendering.',
-            ].join(' '),
-          );
-        }
+        console.warn(
+          [
+            '@tippyjs/react: Cannot use `className` prop in conjunction with',
+            '`render` prop. Place the className on the element you are',
+            'rendering.',
+          ].join(' '),
+        );
 
         return;
       }

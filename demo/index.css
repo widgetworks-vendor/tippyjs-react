@@ -15,3 +15,11 @@ button {
   margin-right: 10px;
   padding: 10px;
 }
+
+[data-placement^='top'] {
+  transform-origin: bottom;
+}
+
+[data-placement^='bottom'] {
+  transform-origin: top;
+}

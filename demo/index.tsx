@@ -1,48 +1,32 @@
-import React, {useState, useEffect, useRef, forwardRef} from 'react';
-import ReactDOM from 'react-dom';
-import styled from 'styled-components';
-import {useSpring, animated} from 'react-spring';
-import {motion, useSpring as useFramerSpring} from 'framer-motion';
-import {followCursor} from 'tippy.js';
-import Tippy, {useSingleton} from '../src';
+import {useState, useEffect, useRef, forwardRef} from 'react';
+import ReactDOM from 'react-dom/client';
+// import {followCursor} from 'tippy.js';
+import {followCursor} from '@wiwo/tippyjs';
+import Tippy, {useSingleton} from '../src/index.js';
 import TippyHeadless, {
   useSingleton as useSingletonHeadless,
-} from '../src/headless';
+} from '../src/headless.js';
 
-import 'tippy.js/dist/tippy.css';
+// import 'tippy.js/dist/tippy.css';
+import '@wiwo/tippyjs/dist/tippy.css';
 import './index.css';
+import {TippyProps} from '../src/Tippy.js';
 
-const ReactSpringBox = styled(animated.div)`
-  background: #333;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
+const ReactSpringBox = ({children, ...attrs}) => {
+  return (<div
+    style={{
+      background: '#333',
+      color: 'white',
+      padding: '5px 10px',
+      borderRadius: '4px',
+    }}
+    {...attrs}
+  >
+    {children}
+  </div>);
+};
 
-  &[data-placement^='top'] {
-    transform-origin: bottom;
-  }
-
-  &[data-placement^='bottom'] {
-    transform-origin: top;
-  }
-`;
-
-const ReactFramerBox = styled(motion.div)`
-  background: #333;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-
-  &[data-placement^='top'] {
-    transform-origin: bottom;
-  }
-
-  &[data-placement^='bottom'] {
-    transform-origin: top;
-  }
-`;
-
-const LazyTippy = forwardRef((props, ref) => {
+const LazyTippy = forwardRef((props: Partial<TippyProps>, ref) => {
   const [mounted, setMounted] = useState(false);
 
   const lazyPlugin = {
@@ -52,7 +36,7 @@ const LazyTippy = forwardRef((props, ref) => {
     }),
   };
 
-  const computedProps = {...props};
+  const computedProps: Partial<TippyProps> = {...props};
 
   computedProps.plugins = [lazyPlugin, ...(props.plugins || [])];
 
@@ -99,7 +83,11 @@ function ContentString() {
   }, []);
 
   return (
-    <Tippy content={count} popperOptions={{modifiers: [{name: 'hi'}]}}>
+    <Tippy
+      content={count}
+      popperOptions={{modifiers: [{name: 'hi (this unknown modifier will be ignored)'}]}}
+      // trigger="click"
+    >
       <button>ContentString</button>
     </Tippy>
   );
@@ -217,7 +205,7 @@ function SingletonHeadless() {
 
       {enabled && (
         <TippyHeadless content="Hello" singleton={target}>
-          <button>Reference</button>
+          <button>setTimeout Reference</button>
         </TippyHeadless>
       )}
       <TippyHeadless placement="right" content="Bye" singleton={target}>
@@ -241,29 +229,29 @@ function FollowCursor() {
 function ReactSpring() {
   const config = {tension: 300, friction: 15};
   const initialStyles = {opacity: 0, transform: 'scale(0.5)'};
-  const [props, setSpring] = useSpring(() => initialStyles);
+  // const [props, setSpring] = useSpring(() => initialStyles);
 
   function onMount() {
-    setSpring({
-      opacity: 1,
-      transform: 'scale(1)',
-      onRest: () => {},
-      config,
-    });
+    // setSpring({
+    //   opacity: 1,
+    //   transform: 'scale(1)',
+    //   onRest: () => {},
+    //   config,
+    // });
   }
 
   function onHide({unmount}) {
-    setSpring({
-      ...initialStyles,
-      onRest: unmount,
-      config: {...config, clamp: true},
-    });
+    // setSpring({
+    //   ...initialStyles,
+    //   onRest: unmount,
+    //   config: {...config, clamp: true},
+    // });
   }
 
   return (
     <TippyHeadless
       render={attrs => (
-        <ReactSpringBox style={props} {...attrs}>
+        <ReactSpringBox {...attrs}>
           Hello
         </ReactSpringBox>
       )}
@@ -272,45 +260,6 @@ function ReactSpring() {
       onHide={onHide}
     >
       <button>react-spring</button>
-    </TippyHeadless>
-  );
-}
-
-function FramerMotion() {
-  const springConfig = {damping: 15, stiffness: 300};
-  const initialScale = 0.5;
-  const opacity = useFramerSpring(0, springConfig);
-  const scale = useFramerSpring(initialScale, springConfig);
-
-  function onMount() {
-    scale.set(1);
-    opacity.set(1);
-  }
-
-  function onHide({unmount}) {
-    const cleanup = scale.onChange(value => {
-      if (value <= initialScale) {
-        cleanup();
-        unmount();
-      }
-    });
-
-    scale.set(0.5);
-    opacity.set(0);
-  }
-
-  return (
-    <TippyHeadless
-      render={attrs => (
-        <ReactFramerBox style={{scale, opacity}} {...attrs}>
-          Hello
-        </ReactFramerBox>
-      )}
-      animation={true}
-      onMount={onMount}
-      onHide={onHide}
-    >
-      <button>framer-motion</button>
     </TippyHeadless>
   );
 }
@@ -370,7 +319,7 @@ function NestedSingleton() {
 }
 
 function ReferenceProp() {
-  const ref = useRef();
+  const ref = useRef<HTMLButtonElement>();
 
   return (
     <>
@@ -385,30 +334,30 @@ function App() {
     <>
       <h2>Content</h2>
       <ContentString />
-      <ContentElement />
-      <h2>Special</h2>
-      <DisabledProp />
-      <VisibleProp />
-      <h2>Singleton</h2>
-      <Singleton />
-      <h2>Singleton Headless</h2>
-      <SingletonHeadless />
-      <h2>Singleton Headless Dynamic Content</h2>
-      <SingletonHeadlessDynamicContent />
-      <h2>Nested Singleton</h2>
-      <NestedSingleton />
-      <h2>Plugins</h2>
-      <FollowCursor />
-      <h2>Headless Tippy w/ React Spring</h2>
-      <ReactSpring />
-      <h2>Headless Tippy w/ Framer Motion</h2>
-      <FramerMotion />
-      <h2>Fully Controlled on Click</h2>
-      <FullyControlledOnClick />
-      <h2>Reference prop</h2>
-      <ReferenceProp />
-      <h2>Nested update</h2>
-      <NestedUpdate />
+      {/*<ContentElement />*/}
+      {/*<h2>Special</h2>*/}
+      {/*<DisabledProp />*/}
+      {/*<VisibleProp />*/}
+      {/*<h2>Singleton</h2>*/}
+      {/*<Singleton />*/}
+      {/*<h2>Singleton Headless</h2>*/}
+      {/*<SingletonHeadless />*/}
+      {/*<h2>Singleton Headless Dynamic Content</h2>*/}
+      {/*<SingletonHeadlessDynamicContent />*/}
+      {/*<h2>Nested Singleton</h2>*/}
+      {/*<NestedSingleton />*/}
+      {/*<h2>Plugins</h2>*/}
+      {/*<FollowCursor />*/}
+      {/*<h2>Headless Tippy w/ React Spring (disabled in this demo)</h2>*/}
+      {/*<ReactSpring />*/}
+      {/*<h2>Fully Controlled on Click</h2>*/}
+      {/*<FullyControlledOnClick />*/}
+      {/*<h2>Reference prop</h2>*/}
+      {/*<ReferenceProp />*/}
+      
+      {/*<h2>Nested update</h2>*/}
+      {/*<NestedUpdate />*/}
+      
       <h2>Lazy Tippy</h2>
       <LazyTippyExample />
     </>
@@ -426,7 +375,11 @@ function NestedUpdate() {
   return (
     <div className="App">
       <h1>{value}</h1>
-      <Tippy content={<NestedContent />} interactive trigger="click">
+      <Tippy
+        content={<NestedContent />}
+        interactive
+        trigger="mouseenter"
+      >
         <span>Hover me</span>
       </Tippy>
     </div>
@@ -441,4 +394,5 @@ function NestedContent() {
   );
 }
 
-ReactDOM.render(<App />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);

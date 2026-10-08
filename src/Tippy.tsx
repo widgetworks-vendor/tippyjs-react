@@ -1,40 +1,82 @@
-import React, {cloneElement, useState} from 'react';
+import * as React from 'react';
+import {cloneElement, forwardRef, useState, PropsWithChildren, ReactText, ReactElement} from 'react';
 import {createPortal} from 'react-dom';
+import type { 
+  Content,
+  Instance,
+  Props,
+  ReferenceElement,
+  State,
+  tippy as tippyFn,
+} from '@wiwo/tippyjs';
 import {
   preserveRef,
   ssrSafeCreateDiv,
   toDataAttributes,
   deepPreserveProps,
-} from './utils';
-import {useMutableBox, useIsomorphicLayoutEffect} from './util-hooks';
-import {classNamePlugin} from './className-plugin';
+} from './utils.js';
+import { 
+  Attrs,
+  RenderAttrs,
+  RenderFn,
+} from './types.js';
+import {useMutableBox, useIsomorphicLayoutEffect} from './util-hooks.js';
+import {classNamePlugin} from './className-plugin.js';
+import type {SingletonSource, SingletonTarget} from './useSingleton.js';
 
-export default function TippyGenerator(tippy) {
-  function Tippy({
-    children,
-    content,
-    visible,
-    singleton,
-    render,
-    reference,
-    disabled = false,
-    ignoreAttributes = true,
-    // Filter React development reserved props
-    // added by babel-preset-react dev plugins:
-    // transform-react-jsx-self and transform-react-jsx-source
-    __source,
-    __self,
-    ...restOfNativeProps
-  }) {
+export type TippyComponent = ReturnType<typeof TippyGenerator>;
+
+export type TippyProps = PropsWithChildren<Omit<Props, 'content' | 'render'> & {
+  visible: boolean;
+  
+  /*
+  CFH: I don't know what the difference is between the source/target singleton objects
+  or when you might use one over the other.
+  
+  The demo site uses both in the `<SingletonHeadless>` example (see `/demo/index.tsx`).
+  */
+  singleton: SingletonSource | SingletonTarget;
+  
+  content: React.ReactNode | Content,
+  render: RenderFn,
+  
+  /**
+   * The "trigger" element (or "target" element)
+   */
+  reference: React.MutableRefObject<ReferenceElement>;
+  disabled: boolean;
+}>;
+
+export default function TippyGenerator(tippy: typeof tippyFn) {
+  function Tippy($props: Partial<TippyProps>) {
+    let {
+      children,
+      content,
+      visible,
+      singleton,
+      render,
+      reference,
+      disabled = false,
+      ignoreAttributes = true,
+      // Filter React development reserved props
+      // added by babel-preset-react dev plugins:
+      // transform-react-jsx-self and transform-react-jsx-source
+      __source,
+      __self,
+      ...restOfNativeProps
+    } = ($props as Partial<TippyProps> & {__source: any, __self: any});
+    
     const isControlledMode = visible !== undefined;
     const isSingletonMode = singleton !== undefined;
 
     const [mounted, setMounted] = useState(false);
-    const [attrs, setAttrs] = useState({});
-    const [singletonContent, setSingletonContent] = useState();
+    const [attrs, setAttrs] = useState<Partial<Attrs>>({});
+    const [singletonContent, setSingletonContent] = useState<React.ReactNode | Content>();
     const mutableBox = useMutableBox(() => ({
       container: ssrSafeCreateDiv(),
       renders: 1,
+      ref: null as ReferenceElement | null,
+      instance: null as Instance | null,
     }));
 
     const props = {
@@ -44,18 +86,16 @@ export default function TippyGenerator(tippy) {
     };
 
     if (isControlledMode) {
-      if (process.env.NODE_ENV !== 'production') {
-        ['trigger', 'hideOnClick', 'showOnCreate'].forEach(nativeStateProp => {
-          if (props[nativeStateProp] !== undefined) {
-            console.warn(
-              [
-                `@tippyjs/react: Cannot specify \`${nativeStateProp}\` prop in`,
-                `controlled mode (\`visible\` prop)`,
-              ].join(' '),
-            );
-          }
-        });
-      }
+      ['trigger', 'hideOnClick', 'showOnCreate'].forEach(nativeStateProp => {
+        if (props[nativeStateProp] !== undefined) {
+          console.warn(
+            [
+              `@tippyjs/react: Cannot specify \`${nativeStateProp}\` prop in`,
+              `controlled mode (\`visible\` prop)`,
+            ].join(' '),
+          );
+        }
+      });
 
       props.trigger = 'manual';
       props.hideOnClick = false;
@@ -65,50 +105,59 @@ export default function TippyGenerator(tippy) {
       disabled = true;
     }
 
-    let computedProps = props;
+    let computedProps: Partial<Props> = props;
     const plugins = props.plugins || [];
 
     if (render) {
+      let $plugins = [...plugins];
+      
+      /**
+       * Inside here `singleton: SingletonSource`
+       */
+      if (isSingletonMode && 'data' in singleton && singleton.data != null){
+        const singletonPlugin = {
+          fn() {
+            return {
+              onTrigger(instance, event) {
+                const node = singleton.data.children.find(
+                  ({instance}) =>
+                    instance.reference === event.currentTarget,
+                );
+                (instance.state as any).$$activeSingletonInstance = node.instance;
+                setSingletonContent(node.content);
+              },
+            };
+          },
+        };
+        
+        $plugins.push(singletonPlugin);
+      }
+      
       computedProps = {
         ...props,
-        plugins:
-          isSingletonMode && singleton.data != null
-            ? [
-                ...plugins,
-                {
-                  fn() {
-                    return {
-                      onTrigger(instance, event) {
-                        const node = singleton.data.children.find(
-                          ({instance}) =>
-                            instance.reference === event.currentTarget,
-                        );
-                        instance.state.$$activeSingletonInstance =
-                          node.instance;
-                        setSingletonContent(node.content);
-                      },
-                    };
-                  },
-                },
-              ]
-            : plugins,
+        plugins: $plugins,
         render: () => ({popper: mutableBox.container}),
       };
     }
 
-    const deps = [reference].concat(children ? [children.type] : []);
+    const deps: any[] = [].concat(
+      reference,
+      children ? [(children as ReactElement).type] : []
+    );
 
     // CREATE
     useIsomorphicLayoutEffect(() => {
-      let element = reference;
-      if (reference && reference.hasOwnProperty('current')) {
+      let element = reference as unknown as ReferenceElement;
+      if (reference && 'current' in reference) {
         element = reference.current;
       }
-
-      const instance = tippy(element || mutableBox.ref || ssrSafeCreateDiv(), {
+      
+      const tippyElement = element || mutableBox.ref || ssrSafeCreateDiv();
+      const tippyProps = {
         ...computedProps,
         plugins: [classNamePlugin, ...(props.plugins || [])],
-      });
+      };
+      const instance = tippy(tippyElement, tippyProps) as Instance;
 
       mutableBox.instance = instance;
 
@@ -223,10 +272,10 @@ export default function TippyGenerator(tippy) {
     return (
       <>
         {children
-          ? cloneElement(children, {
+          ? cloneElement((children as ReactElement), {
               ref(node) {
                 mutableBox.ref = node;
-                preserveRef(children.ref, node);
+                preserveRef((children as any).ref, node);
               },
             })
           : null}

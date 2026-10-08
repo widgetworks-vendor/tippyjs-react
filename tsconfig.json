@@ -1,6 +1,8 @@
 {
-  // only used for typechecking
   "compilerOptions": {
-    "moduleResolution": "node"
+    "target": "es2023",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "moduleResolution": "nodenext"
   }
 }

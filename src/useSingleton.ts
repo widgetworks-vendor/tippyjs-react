@@ -1,14 +1,46 @@
-import {useMutableBox, useIsomorphicLayoutEffect} from './util-hooks';
-import {deepPreserveProps} from './utils';
-import {classNamePlugin} from './className-plugin';
+import type {
+  createSingleton as createSingletonFn,
+  Content,
+  CreateSingletonInstance,
+  Instance, Props,
+} from '@wiwo/tippyjs';
+import {useMutableBox, useIsomorphicLayoutEffect} from './util-hooks.js';
+import {deepPreserveProps} from './utils.js';
+import {classNamePlugin} from './className-plugin.js';
 import {useMemo, useState} from 'react';
 
-export default function useSingletonGenerator(createSingleton) {
+export type SingletonSource = {
+  data: SingletonBox;
+  hook(data: any): void;
+  cleanup(instance: Instance): void;
+};
+export type SingletonTarget = {
+  hook(data: any);
+  cleanup(instance: Instance): void;
+};
+export type SingletonHookProps = {
+  instance: Instance;
+  content: Content;
+  props: Partial<Props>;
+  setSingletonContent: (content: Content) => void;
+};
+export type SingletonBox = {
+  children: SingletonHookProps[];
+  renders: number;
+  instance: CreateSingletonInstance | null;
+  sourceData: SingletonHookProps | null;
+  setSingletonContent: ((content: Content) => void) | null;
+}
+
+export default function useSingletonGenerator(createSingleton: typeof createSingletonFn) {
   return function useSingleton({disabled = false, overrides = []} = {}) {
     const [mounted, setMounted] = useState(false);
-    const mutableBox = useMutableBox({
-      children: [],
+    const mutableBox = useMutableBox<SingletonBox>({
+      children: [] as SingletonHookProps[],
       renders: 1,
+      instance: null as CreateSingletonInstance | null,
+      sourceData: null as SingletonHookProps | null,
+      setSingletonContent: null as ((content: Content) => void) | null,
     });
 
     useIsomorphicLayoutEffect(() => {
@@ -20,15 +52,12 @@ export default function useSingletonGenerator(createSingleton) {
       const {children, sourceData} = mutableBox;
 
       if (!sourceData) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.error(
-            [
-              '@tippyjs/react: The `source` variable from `useSingleton()` has',
-              'not been passed to a <Tippy /> component.',
-            ].join(' '),
-          );
-        }
-
+        console.error(
+          [
+            '@tippyjs/react: The `source` variable from `useSingleton()` has',
+            'not been passed to a <Tippy /> component.',
+          ].join(' '),
+        );
         return;
       }
 
@@ -90,20 +119,20 @@ export default function useSingletonGenerator(createSingleton) {
       }
     });
 
-    return useMemo(() => {
-      const source = {
+    const singletonTupleResult = useMemo(() => {
+      const source: SingletonSource = {
         data: mutableBox,
-        hook(data) {
+        hook(data: SingletonHookProps) {
           mutableBox.sourceData = data;
           mutableBox.setSingletonContent = data.setSingletonContent;
         },
-        cleanup() {
+        cleanup(instance: Instance) {
           mutableBox.sourceData = null;
         },
       };
 
-      const target = {
-        hook(data) {
+      const target: SingletonTarget = {
+        hook(data: SingletonHookProps) {
           mutableBox.children = mutableBox.children.filter(
             ({instance}) => data.instance !== instance,
           );
@@ -111,7 +140,7 @@ export default function useSingletonGenerator(createSingleton) {
 
           if (
             mutableBox.instance?.state.isMounted &&
-            mutableBox.instance?.state.$$activeSingletonInstance ===
+            (mutableBox.instance?.state as any).$$activeSingletonInstance ===
               data.instance
           ) {
             mutableBox.setSingletonContent?.(data.content);
@@ -123,7 +152,7 @@ export default function useSingletonGenerator(createSingleton) {
             );
           }
         },
-        cleanup(instance) {
+        cleanup(instance: Instance) {
           mutableBox.children = mutableBox.children.filter(
             data => data.instance !== instance,
           );
@@ -136,7 +165,8 @@ export default function useSingletonGenerator(createSingleton) {
         },
       };
 
-      return [source, target];
+      return [source, target] as const;
     }, []);
+    return singletonTupleResult;
   };
 }

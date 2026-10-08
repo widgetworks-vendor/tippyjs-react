@@ -1,12 +1,13 @@
-export const isBrowser =
-  typeof window !== 'undefined' && typeof document !== 'undefined';
+import {Attrs, RenderAttrs} from './types.js';
+
+export const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
 export function preserveRef(ref, node) {
   if (ref) {
     if (typeof ref === 'function') {
       ref(node);
     }
-    if ({}.hasOwnProperty.call(ref, 'current')) {
+    if (Object.hasOwn(ref, 'current')) {
       ref.current = node;
     }
   }
@@ -16,8 +17,8 @@ export function ssrSafeCreateDiv() {
   return isBrowser && document.createElement('div');
 }
 
-export function toDataAttributes(attrs) {
-  const dataAttrs = {
+export function toDataAttributes(attrs: Partial<Attrs>): RenderAttrs {
+  const dataAttrs: RenderAttrs = {
     'data-placement': attrs.placement,
   };
 
